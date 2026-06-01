@@ -1,0 +1,95 @@
+# Testing — Python (pytest)
+
+Patterns for Python tests with pytest (the de facto standard). Match the project's existing layout and plugins.
+
+## Basics
+
+Plain functions named `test_*`, plain `assert` — pytest rewrites assertions to give rich failure output, so you don't need special assert methods.
+
+```python
+def test_parse_price_valid():
+    assert parse_price("19.99") == 1999  # cents
+
+def test_parse_price_negative_raises():
+    with pytest.raises(ValueError, match="negative"):
+        parse_price("-1")
+```
+
+Run: `pytest` (whole suite), `pytest path/test_x.py::test_name` (one test), `pytest -k "price"` (by name), `pytest -x` (stop on first failure), `pytest -q` (quiet).
+
+## Fixtures
+
+Use fixtures for reusable setup/teardown instead of repeating it. `yield` separates setup from cleanup; cleanup runs even if the test fails.
+
+```python
+@pytest.fixture
+def db_session():
+    session = make_test_session()
+    yield session
+    session.rollback()   # isolate: each test gets a clean slate
+    session.close()
+
+def test_creates_user(db_session):
+    create_user(db_session, email="a@test.dev")
+    assert db_session.query(User).count() == 1
+```
+
+Scope fixtures (`function` default, `module`, `session`) to balance speed vs. isolation — but anything mutable shared across tests risks order-dependence, so default to function scope unless setup is expensive and read-only. Put shared fixtures in `conftest.py`.
+
+## Parametrize
+
+Cover many cases without duplicating the test body — ideal for edge cases:
+
+```python
+@pytest.mark.parametrize("raw,expected", [
+    ("0", 0),
+    ("19.99", 1999),
+    ("1000000", 100000000),
+])
+def test_parse_price_cases(raw, expected):
+    assert parse_price(raw) == expected
+```
+
+## Mocking
+
+Use `unittest.mock` (`patch`, `MagicMock`) or `pytest-mock`'s `mocker` fixture. Patch where the name is *used*, not where it's defined — a common source of "the mock didn't take" confusion.
+
+```python
+def test_sends_welcome_email(mocker):
+    send = mocker.patch("app.services.users.send_email")  # patched at use site
+    register_user("a@test.dev")
+    send.assert_called_once()
+```
+
+Use `freezegun` or `pytest`'s monkeypatch for time; control randomness with a seed. Mock external services (HTTP via `responses`/`respx`, payment, email) — not the code under test.
+
+## API / framework tests
+
+- **FastAPI**: `TestClient` (or `httpx.AsyncClient` for async) hits the app in-process. Override dependencies (`app.dependency_overrides`) to inject a test DB or fake auth.
+  ```python
+  def test_create_user_invalid(client):
+      r = client.post("/users", json={"email": "bad"})
+      assert r.status_code == 422
+  ```
+- **Django**: use `pytest-django`, the `client` fixture, and `@pytest.mark.django_db` for DB access (wraps each test in a rolled-back transaction for isolation). Use factories (`factory_boy`) over hand-built objects.
+- **Flask**: use the app's `test_client()`.
+
+Prefer a real test database wrapped in a per-test transaction/rollback over mocking the ORM — mocking the DB hides query and constraint bugs.
+
+## Async
+
+Mark async tests and configure the plugin (`pytest-asyncio`, often `asyncio_mode = auto`):
+
+```python
+@pytest.mark.asyncio
+async def test_fetch():
+    result = await fetch_user(1)
+    assert result.id == 1
+```
+
+## Conventions & layout
+
+- Tests under `tests/` mirroring the package, files `test_*.py`, configured in `pyproject.toml`/`pytest.ini`.
+- Keep tests isolated (no reliance on order or shared mutable state) and deterministic.
+- Useful plugins: `pytest-cov` (coverage — read it to find untested branches, not to chase a number), `pytest-xdist` (`-n auto` for parallel speed). Add only what the project uses.
+- Type hints in tests and fixtures help here too.

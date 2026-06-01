@@ -1,0 +1,58 @@
+---
+name: frontend
+description: Build and modify frontend code in React and Next.js — components, pages, hooks, state, data fetching, forms, and routing. Use this skill whenever the user asks to create or change a component, page, UI, screen, or anything client-side, or mentions React, Next.js, hooks, JSX/TSX, or app/pages router. Also use it proactively when implementing the client-side tasks of a plan. Covers component design, state management, data fetching, accessibility, and the Server/Client Component model; load references/nextjs.md for App Router specifics. Pairs with the backend skill (it consumes those APIs) and the testing skill.
+---
+
+# Frontend (React / Next.js)
+
+Build interfaces that are correct, accessible, and consistent with the existing app. The recurring failure modes here are: putting state and effects everywhere until data flow is impossible to follow, shipping inaccessible markup, and — in Next.js — getting the Server vs. Client Component boundary wrong.
+
+## First: match what exists
+
+Read a couple of existing components before writing one. Match the project's conventions: component file layout, styling approach (Tailwind / CSS Modules / styled-components — don't introduce a new one), state library (or lack of one), and how data fetching is already done. Detect the Next.js router in use (App Router `app/` vs. Pages Router `pages/`) — they have different rules. For App Router and Next-specific data/rendering patterns, read `references/nextjs.md`.
+
+## Component design
+
+Keep components focused: one clear responsibility, props in, JSX out. Prefer many small composable components over one large one with a dozen props and branches. Lift state only as high as it needs to go — co-locate state with the component that uses it; reach for context or a store only when prop-drilling genuinely hurts.
+
+Make data flow obvious: props down, events up. Derive values during render instead of mirroring props into state (a `useState` initialized from a prop that then drifts is a classic bug). Give every list item a stable, meaningful `key` — never the array index when the list can reorder or items can be inserted.
+
+## Hooks, correctly
+
+- Follow the rules of hooks: top level only, never in conditions or loops.
+- `useEffect` is for synchronizing with something *outside* React (subscriptions, the DOM, network). It is not for transforming data you already have — do that during render. If an effect's only job is to compute state from props, you probably don't need the effect.
+- Always specify the dependency array honestly. Don't omit deps to silence the linter; if a dep causes loops, fix the cause (memoize the function/object, or move it) rather than lying about dependencies.
+- Clean up effects (unsubscribe, abort fetches) in the returned function to avoid leaks and state-after-unmount warnings.
+- Reach for `useMemo`/`useCallback` to fix a measured problem (expensive compute, referential stability for a dependency), not reflexively.
+
+## Data fetching
+
+Don't hand-roll loading/error/caching with raw `useEffect` + `fetch` when the project has a data layer — use it (React Query / SWR / RSC fetching). Every async UI has three states: loading, error, and success — render all three; a component that only handles success will flash blank or crash on failure. Abort or ignore stale requests when inputs change or the component unmounts so a slow earlier request can't overwrite newer data.
+
+## Forms
+
+Validate on the client for UX but never trust the client — the backend validates for real. Keep inputs controlled (or use the project's form lib). Disable submit while a request is in flight and surface server errors back onto the form. Associate every input with a `<label>`.
+
+## Accessibility & semantics
+
+Use semantic HTML — `<button>` for actions, `<a>` for navigation, real headings in order. A clickable `<div>` is a bug: it's not focusable or keyboard-operable. Provide `alt` text for meaningful images (empty `alt=""` for decorative). Ensure interactive elements are reachable and operable by keyboard and have visible focus. Add ARIA only to fill gaps semantic HTML can't — correct semantic markup beats sprinkled `aria-*`.
+
+## Performance (when it matters)
+
+Don't pre-optimize. But: avoid creating new object/array/function literals passed as props in hot paths that defeat memoization; lazy-load heavy or below-the-fold components (`React.lazy` / `next/dynamic`); use `next/image` for images in Next.js. Measure before reaching for heavier fixes.
+
+## TypeScript
+
+Type props with an explicit interface/type. Avoid `any`; type event handlers properly (`React.ChangeEvent<HTMLInputElement>`, etc.). Let inference work for local state but annotate when it's `null`-initialized or a union.
+
+## Workflow
+
+1. Confirm what the component does, its props, and which states it must handle (incl. empty/loading/error).
+2. Build it matching existing patterns and styling.
+3. Wire data via the project's data layer; handle all three async states.
+4. Check accessibility (keyboard, labels, semantics).
+5. Hand off to the testing skill — test behavior the user sees (rendered output, interactions), not implementation details.
+
+## Output format
+
+Provide the component code. Note the props contract and any states it handles, and flag assumptions (e.g. "assumed the existing Tailwind setup; using `useQuery` like the other pages").

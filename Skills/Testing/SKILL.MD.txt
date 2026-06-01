@@ -1,0 +1,58 @@
+---
+name: testing
+description: Write, run, and fix tests — unit, integration, and end-to-end — for JavaScript/TypeScript and Python code, including React components. Use this skill whenever the user asks to "write tests", "add coverage", "test this", set up a test suite, debug a failing test, or mentions a test runner (Jest, Vitest, Playwright, Testing Library, pytest). Also use it proactively after implementing a feature with the backend or frontend skills — non-trivial code should ship with tests. Load the language reference (references/javascript.md or references/python.md) for tooling and patterns. Focuses on testing behavior over implementation.
+---
+
+# Testing
+
+Write tests that catch real bugs and give confidence to change code — not tests that merely restate the implementation or inflate a coverage number. A test's value is the bug it would catch; if a change in requirements should break a test but it wouldn't, the test isn't pulling its weight.
+
+## What to test (and what not to)
+
+Test **behavior and contracts**, not implementation details. Assert on what a function returns or what a user sees — not on which private methods got called or what internal state holds. Tests coupled to implementation break on every refactor and erode trust in the suite.
+
+Prioritize by payoff: the unhappy paths and edge cases (empty input, nulls, boundaries, errors, concurrent access) are where bugs hide and where tests earn their keep — the happy path usually already works. Don't chase 100% coverage; cover the logic that matters and the parts most likely to break. Skip tests for trivial passthroughs and framework code.
+
+Pick the right level:
+- **Unit** — pure logic, individual functions, in isolation. Fast and numerous.
+- **Integration** — units working together: an endpoint hitting a real (test) DB, a component with its data layer. Fewer, higher-value.
+- **E2E** — critical user flows through the whole stack (Playwright). Few, slow, reserved for the flows that must never break (login, checkout).
+
+Most suites should be mostly unit + some integration + a thin layer of E2E.
+
+## Load the language reference
+
+- **JavaScript / TypeScript** (Jest/Vitest, Testing Library, Playwright) → `references/javascript.md`
+- **Python** (pytest) → `references/python.md`
+
+Detect the runner from the project before introducing one; match what's already configured.
+
+## Principles that hold across languages
+
+**Structure each test Arrange–Act–Assert.** Set up inputs, perform the one action under test, assert the outcome. One logical behavior per test — a test that asserts five unrelated things tells you little when it fails.
+
+**Make tests deterministic and isolated.** No dependence on test order, wall-clock time, network, or leftover state. Each test sets up and tears down its own world. Control time, randomness, and external services explicitly. A flaky test is worse than no test — it trains people to ignore failures.
+
+**Name tests so a failure reads like a sentence.** "returns 404 when the user does not exist" tells you what broke without opening the file. "test user 2" does not.
+
+**Mock at the boundary, sparingly.** Stub genuine externals (third-party APIs, email, payment, time) so tests are fast and deterministic. Don't mock the thing you're testing, and don't mock so much that the test only verifies your mocks. Over-mocking produces tests that pass while the real system is broken.
+
+**Test the contract, both sides.** For error handling, assert the error path actually happens (the right exception/status), not just the happy return.
+
+**A good test fails for the right reason.** Before trusting a new test, make sure it can fail — if it passes against broken code, it isn't testing anything.
+
+## Debugging a failing test
+
+When a test fails, first decide: is the test wrong or is the code wrong? Read the assertion and the actual value. A test that's testing implementation details may be "correctly" failing on a valid refactor — fix the test. A test asserting real behavior that fails means the code regressed — fix the code, and keep the test. Reproduce in isolation (run just that test), read the actual vs. expected, and resist the urge to make it pass by weakening the assertion.
+
+## Workflow
+
+1. Identify what behavior needs covering — pull it from the plan's Verification section if there is one, plus the error paths the implementation introduced.
+2. Detect/confirm the runner and follow the project's existing test conventions and file locations.
+3. Write tests covering the happy path plus the edge and error cases that matter most.
+4. Run them. Make sure they pass for the right reason and that at least the key ones can fail when the code is broken.
+5. Report what's covered and, honestly, what isn't.
+
+## Output format
+
+Provide the test code, then a short note: what's covered, any notable gaps, and the command to run them.

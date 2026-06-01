@@ -1,0 +1,94 @@
+---
+name: planning
+description: Plan software work before writing code — turning a feature request, bug, or vague idea into an explicit, reviewable implementation plan with scoped tasks, affected files, risks, and a verification strategy. Use this skill whenever the user asks to "plan", "scope", "break down", "design an approach for", or "figure out how to build" something, AND proactively before any non-trivial implementation (multi-file changes, new features, refactors, migrations). If a request would touch more than two files or you're unsure how the pieces fit, plan first instead of coding immediately. Pairs with the backend, frontend, and testing skills, which implement the plan.
+---
+ 
+# Planning
+ 
+The goal of this skill is to think before building: produce a plan the user can read in two minutes, correct cheaply, and hand off to implementation (yourself or the backend/frontend/testing skills). A good plan prevents the expensive failure mode where Claude writes hundreds of lines in the wrong direction.
+ 
+## When to plan vs. just do it
+ 
+Plan when the work is ambiguous, spans multiple files, introduces a new pattern, or carries risk (data migrations, auth, payments, anything destructive). Skip the ceremony for one-line fixes, single-function edits, or questions — a plan there is just friction. When in doubt, write the plan; it's cheap relative to a wrong implementation.
+ 
+## Process
+ 
+### 1. Understand before planning
+ 
+Resolve ambiguity first. Read the relevant existing code rather than assuming structure — look at how similar features are already built so the plan matches existing conventions instead of importing foreign patterns. If a key decision is genuinely unresolved (which library, which data model, sync vs. async), surface it as an open question rather than silently picking; one wrong assumption can invalidate the whole plan.
+ 
+Gather: what exactly is being asked, what already exists that's relevant, what the constraints are (stack, deadlines, things that must not break), and what "done" looks like.
+ 
+### 2. Write the plan
+ 
+ALWAYS use this structure:
+ 
+```markdown
+# Plan: [short title]
+ 
+## Goal
+[1–2 sentences. What we're building and why. The user-facing outcome.]
+ 
+## Approach
+[2–4 sentences on the strategy and any key decision. Why this way and not the obvious alternative.]
+ 
+## Tasks
+1. [Imperative, scoped to roughly one commit] — `path/to/file`
+2. ...
+   (Order by dependency: things others depend on come first.)
+ 
+## Affected / new files
+- `path` — what changes and why
+ 
+## Risks & open questions
+- [Anything that could break, any decision you're unsure about, anything needing user input]
+ 
+## Verification
+[How we'll know it works: specific tests to write/run, manual checks, edge cases. Hand this to the testing skill.]
+```
+ 
+Keep it tight. A plan longer than the code it describes is a smell. Tasks should be concrete enough that someone could pick any one up in isolation — "Add `POST /sessions` endpoint with email/password validation", not "do the auth stuff".
+ 
+### 3. Confirm, then proceed
+ 
+For anything non-trivial, show the plan and pause for a quick confirmation before implementing — this is the cheapest moment to catch a wrong assumption. Explicitly call out open questions so the user can answer them. If the user already said "just build it", skip the pause but still write the plan inline so the reasoning is visible and correctable.
+ 
+### 4. Track execution
+ 
+For multi-task plans, keep a visible checklist (the TodoWrite tool in Claude Code, or a checklist in your reply) and update it as tasks complete. This keeps long jobs from drifting and lets the user see progress. If reality diverges from the plan mid-implementation (a task turns out bigger, an assumption was wrong), stop and revise the plan rather than improvising silently.
+ 
+## Principles
+ 
+- **Smallest plan that's still complete.** Detail proportional to risk, not to impress.
+- **Sequence by dependency.** A plan that builds the UI before the endpoint it calls is wrong even if every task is right.
+- **Name the risk.** The valuable part of a plan is usually the one risk or open question, not the obvious happy-path steps.
+- **Match the codebase.** Plans should extend existing conventions, not introduce a parallel style.
+- **Verification is part of the plan, not an afterthought.** Every plan ends knowing how it'll be checked.
+## Example
+ 
+**Request:** "Users should be able to reset their password."
+ 
+**Plan:**
+```markdown
+# Plan: Password reset via email
+ 
+## Goal
+Let a user who forgot their password request a reset link by email and set a new password.
+ 
+## Approach
+Token-based flow: generate a single-use, time-limited token, email a link, verify on submit.
+Reuse the existing email service and the bcrypt hashing already used at signup — no new deps.
+ 
+## Tasks
+1. Add `password_reset_tokens` table (user_id, token_hash, expires_at) — `migrations/`
+2. `POST /password-reset/request` — issue token, send email — `routes/auth.*`
+3. `POST /password-reset/confirm` — validate token, update password, invalidate token — `routes/auth.*`
+4. Frontend: request form + reset form pages — `app/reset/`
+5. Tests for both endpoints incl. expired/used-token cases
+ 
+## Risks & open questions
+- Token expiry window? (proposing 1 hour)
+- Don't reveal whether an email exists (return 200 regardless) — security requirement.
+ 
+## Verification
+Unit tests on token validation (expired, reused, wrong). Integration test of full flow. Manual: request → click link → log in with new password.

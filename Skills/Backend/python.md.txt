@@ -1,0 +1,66 @@
+# Backend — Python
+
+Reference for server-side work in Python. Read the relevant section; skip the rest.
+
+## Contents
+- Framework conventions (FastAPI / Django / Flask)
+- Validation with Pydantic
+- Async & error handling
+- Data access
+- Project structure
+
+## Framework conventions
+
+Detect the framework from `pyproject.toml` / `requirements.txt` and follow its idioms.
+
+- **FastAPI**: let it do the heavy lifting — type-hinted parameters + Pydantic models give you validation, serialization, and OpenAPI docs for free. Use dependency injection (`Depends`) for auth, DB sessions, and shared setup. Raise `HTTPException` for expected error responses; register exception handlers for custom error types. Use `async def` handlers only when the work inside is actually async (async DB driver, httpx) — otherwise a plain `def` runs in a threadpool and is fine.
+- **Django / DRF**: respect the app structure (models, views/viewsets, serializers, urls). Use serializers for validation, the ORM for data access, and migrations for schema. Use `select_related`/`prefetch_related` to avoid N+1. Don't bypass the ORM with raw SQL unless necessary, and parameterize if you do.
+- **Flask**: keep views thin; use blueprints to organize. Add an extension or Pydantic for validation (Flask doesn't validate by default). Register error handlers with `@app.errorhandler`. Use the app/request context correctly; don't hold request-scoped objects globally.
+
+## Validation with Pydantic
+
+Model every input; let parsing reject bad data before it reaches your logic:
+
+```python
+class CreateUser(BaseModel):
+    email: EmailStr
+    age: int | None = Field(default=None, gt=0)
+
+# FastAPI: just annotate the parameter — validation is automatic
+@app.post("/users", status_code=201)
+def create_user(payload: CreateUser): ...
+```
+
+Outside FastAPI, call `CreateUser.model_validate(data)` and catch `ValidationError` to return a 422. Use Pydantic types (`EmailStr`, constrained fields) rather than re-validating by hand.
+
+## Async & error handling
+
+- Don't mix blocking calls into async handlers — a synchronous DB call inside `async def` blocks the event loop. Use an async driver, or keep the handler sync.
+- Raise specific exceptions and map them to responses in one place (FastAPI exception handlers, DRF exception handling, Flask error handlers). Define custom exceptions (`NotFoundError`, etc.) rather than passing status codes around as ints.
+- Never let an unhandled exception leak a traceback to the client in production. Log it with context server-side; return a generic 500.
+- Use `try/except` narrowly around the failing operation; avoid bare `except:` which also catches `KeyboardInterrupt`/`SystemExit`. Never `except Exception: pass`.
+
+## Data access
+
+- Use the project's ORM (SQLAlchemy, Django ORM, Tortoise) or a parameterized query layer. Never f-string user input into SQL.
+- Manage sessions/transactions explicitly: a request-scoped session, commit on success, roll back on error. With SQLAlchemy use a context manager or dependency that guarantees cleanup.
+- Eager-load relations you'll use to avoid N+1 (`selectinload`/`joinedload` in SQLAlchemy, `select_related`/`prefetch_related` in Django).
+- Treat migrations (Alembic / Django migrations) as the source of truth for schema; don't hand-edit the DB.
+
+## Project structure
+
+A common layout — match the repo if it differs:
+```
+app/
+  api/ or routers/      # HTTP layer
+  services/             # business logic, framework-agnostic
+  models/               # ORM models
+  schemas/              # Pydantic models
+  db/                   # session/engine setup
+  core/                 # config, security
+```
+Keep business logic out of route functions so it's testable without spinning up the app. Load config/secrets from environment (e.g. pydantic-settings), not hardcoded.
+
+## Python specifics
+
+Use type hints throughout and consider `mypy`/`pyright` in strict mode. Use a virtual environment and pin dependencies. Format with the project's tool (black/ruff). Prefer `pathlib` over string paths, and `logging` over `print` for anything server-side.

@@ -1,0 +1,43 @@
+---
+name: backend
+description: Build and modify backend code — HTTP APIs, business logic, data access, auth, background jobs — in Node/TypeScript or Python. Use this skill whenever the user asks to create or change an endpoint, route, controller, service, model, migration, or any server-side logic, or mentions a backend framework (Express, Fastify, NestJS, Next.js route handlers, FastAPI, Django, Flask). Also use it proactively when implementing the server-side tasks of a plan. Covers API design, validation, error handling, and data access patterns; load the language-specific reference for stack details. Pairs with the testing skill for verification.
+---
+
+# Backend
+
+Write server-side code that is correct, safe at its boundaries, and consistent with the existing codebase. The two recurring failure modes this skill guards against are trusting input that came from outside the system, and inventing a new architecture instead of matching the one already in the repo.
+
+## First: match what exists
+
+Before writing anything, read a neighboring route/service/model in the same project. Mirror its layering, naming, error handling, and validation approach. A technically good endpoint written in a style foreign to the codebase is a net negative. Detect the stack from the project (package.json / pyproject.toml / requirements) rather than assuming.
+
+Then load the reference for the language you're working in:
+- **Node / TypeScript** → read `references/node-typescript.md`
+- **Python** → read `references/python.md`
+
+Read only the one you need.
+
+## Core practices (stack-independent)
+
+**Validate at the boundary.** Every value crossing into the system from a request — body, query, params, headers — is untrusted until validated. Parse into typed/validated structures at the edge (Zod/Pydantic/etc.) so the inner code works with known-good data. Never interpolate user input into SQL, shell commands, file paths, or template strings; use parameterized queries and safe APIs.
+
+**Design the API for the consumer.** Resource-oriented paths, correct status codes (201 for created, 400 vs 401 vs 403 vs 404 distinguished, 422 for validation, 5xx only for genuine server faults), and consistent response shapes. Pick one error envelope and use it everywhere. Make endpoints idempotent where the HTTP method implies it.
+
+**Handle errors deliberately.** Distinguish expected failures (not found, validation, conflict) — which become specific 4xx responses — from unexpected ones, which get logged with context and return a generic 500 without leaking internals (stack traces, SQL, secrets). Don't swallow errors silently; an empty catch block is a future debugging nightmare.
+
+**Guard the data layer.** Wrap multi-step writes in transactions so partial failures don't corrupt state. Be explicit about what a query loads to avoid N+1 patterns. Treat migrations as forward-only and reversible where possible; never edit a migration that has already run in production.
+
+**Secure the basics.** Hash passwords with bcrypt/argon2 (never store or log plaintext or secrets). Authenticate then authorize — check not just that a user is logged in but that they may touch *this* resource. Keep secrets in env/config, not in code. Set sensible timeouts and limits so one slow client can't exhaust resources.
+
+**Think about concurrency and failure.** Backends run many requests at once. Avoid shared mutable state; assume any external call (DB, API, queue) can be slow or fail and handle it. For expensive or slow work, prefer a background job over blocking the request.
+
+## Workflow
+
+1. Confirm the contract: method, path, request shape, response shape, error cases. If unclear, settle it before coding.
+2. Implement following the existing layering (route → validation → service/logic → data access).
+3. Cover the unhappy paths: invalid input, missing resource, unauthorized, conflict.
+4. Hand off to the testing skill — at minimum, validation logic and the main error branches deserve tests, not just the happy path.
+
+## Output format
+
+State the contract briefly, then provide the code. Note any decision the user should be aware of (e.g. "returning 200 on unknown email to avoid user enumeration") and anything you assumed that they may want to change.

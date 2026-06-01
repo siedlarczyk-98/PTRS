@@ -1,0 +1,38 @@
+# Frontend — Next.js specifics
+
+Read this when working in a Next.js project, especially the App Router. Match the router actually in use (`app/` = App Router, `pages/` = Pages Router).
+
+## Server vs. Client Components (App Router)
+
+This is the boundary that causes the most bugs. By default, components in `app/` are **Server Components**: they run on the server, can be `async`, can fetch data and touch secrets directly, and ship zero JS to the browser. Add `"use client"` at the top of a file to make it (and its imported children) a **Client Component** — needed for anything interactive: `useState`, `useEffect`, event handlers, browser APIs, most context.
+
+Rules of thumb:
+- Keep components as Server Components by default; opt into client only where interactivity actually lives.
+- Push `"use client"` to the leaves. Don't mark a big page client just because one button needs state — extract the interactive bit into a small client component and keep the page a server component.
+- Server Components can import and render Client Components, but not vice versa (a client component can only receive a server component via `children`/props, not import it).
+- Never put secrets, server-only env vars, or direct DB access in a client component — it ships to the browser.
+
+## Data fetching (App Router)
+
+- Fetch in Server Components with plain `async`/`await` — no `useEffect` needed. This is the preferred path: it runs server-side, avoids client waterfalls, and keeps data-fetching code off the client bundle.
+- `fetch` is extended with caching; control it with `{ cache: 'no-store' }` for dynamic data or `{ next: { revalidate: N } }` for ISR.
+- Use `loading.tsx` for route-level loading UI and `error.tsx` (a client component) for route-level error boundaries.
+- For client-side fetching that *does* need to be on the client (live updates, user-triggered), use the project's data layer (React Query/SWR) rather than raw effects.
+- **Server Actions** (`"use server"`) handle mutations from forms without a separate API route; use them where the project already does, and still validate input inside them — they're a real server boundary.
+
+## Routing (App Router)
+
+- File-based: `app/foo/page.tsx` → `/foo`. `layout.tsx` wraps nested routes and persists across navigation. Dynamic segments via `[id]`.
+- Navigate with `<Link>` for prefetching; use the `useRouter` hook from `next/navigation` (not `next/router`) for programmatic navigation in client components.
+- Read params via the `params`/`searchParams` props passed to pages (note: in recent Next versions these can be async — await them).
+
+## Pages Router (if the project uses `pages/`)
+
+Different model: data fetching via `getServerSideProps`/`getStaticProps`/`getStaticPaths`, `_app.tsx`/`_document.tsx` for shells, `next/router` for navigation, API routes in `pages/api/`. Don't mix App Router patterns into it.
+
+## Common gotchas
+
+- Hydration mismatch: server-rendered HTML must match the first client render. Don't render `Date.now()`, `window`, or random values during render; guard browser-only code behind an effect or a mounted check.
+- `next/image` needs width/height (or `fill`) and configured domains for remote images.
+- Metadata: use the `metadata` export or `generateMetadata` in the App Router instead of a `<head>` tag.
+- Environment variables: only `NEXT_PUBLIC_`-prefixed vars are exposed to the browser; everything else is server-only.
